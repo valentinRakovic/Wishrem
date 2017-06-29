@@ -38,4 +38,8 @@
     - "git+https://github.com/uniflex/uniflex"
     - "git+https://github.com/uniflex/sbi"
     become: yes
-
+  - name: Copy code
+    synchronize:
+      src: ../../
+      dest: ~/wishrem
+      recursive: yes
