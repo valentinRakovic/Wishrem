@@ -12,3 +12,8 @@ services:
      - "5555"
     depends_on:
         - "database"
+  broker:
+    image: uniflex/broker
+    ports:
+     - "8989:8989"
+     - "8990:8990"
