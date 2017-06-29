@@ -10,13 +10,9 @@ RUN apt-get install -y python3-mysql.connector
 
 WORKDIR /app
 
-COPY insert_query.py /app/insert_query.py
+COPY . /app/
 
-COPY propagation_model_estimation.py /app/propagation_model_estimation.py
 
-COPY query_data.py /app/query_data.py
-
-COPY test_query.py /app/test_query.py
 
 EXPOSE 5555 
 
