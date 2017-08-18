@@ -7,3 +7,6 @@
 [submodule "controllers_dockers"]
 	path = controllers_dockers
 	url = https://github.com/danieldUKIM/controllers_dockers
+[submodule "nodes_ansible"]
+	path = nodes_ansible
+	url = https://github.com/danieldUKIM/nodes_ansible
