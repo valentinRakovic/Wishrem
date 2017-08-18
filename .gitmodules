@@ -1,3 +1,6 @@
 [submodule "uniflex_wishrem"]
 	path = uniflex_wishrem
 	url = https://github.com/danieldUKIM/uniflex_wishrem
+[submodule "rem_backend"]
+	path = rem_backend
+	url = https://github.com/danieldUKIM/rem_backend
