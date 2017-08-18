@@ -5,27 +5,43 @@ from __future__ import print_function
 
 import mysql.connector
 from mysql.connector import errorcode
+import json
+import insert_query
 
 DB_NAME = 'remdb'
 
 TABLES = {}
-TABLES['devices'] = (
-    "CREATE TABLE `devices` ("
-    "  `uuid` int(11) NOT NULL AUTO_INCREMENT,"
-    "  `mac_address` varchar(17) NOT NULL,"
-    "  `type` int(1) NOT NULL,"
-    "  `max_power` float NOT NULL,"
+
+TABLES['global_location'] = (
+    "CREATE TABLE `global_location` ("
+    "  `id` bigint NOT NULL AUTO_INCREMENT,"
+    "  `name_identifier` varchar(32),"
     "  `x_coord` float NOT NULL,"
     "  `y_coord` float NOT NULL,"
-    "  `global_loc_id` bigint NOT NULL,"
-    "  `floor` int(2) NOT NULL,"
-    "  `mode` varchar(8) NOT NULL,"
-    "  `status` int(2) NOT NULL,"
-    "  `active_channel` int(2) NOT NULL,"
-    "  `active_channel_sup` int(2) NOT NULL,"
-    "  PRIMARY KEY (`uuid`)"
+    "  `z_coord` float NOT NULL,"
+    "  PRIMARY KEY (`id`)"
     ") ENGINE=InnoDB")
 
+TABLES['devices'] = (
+    "CREATE TABLE `devices` ("
+    "  `uuid` varchar(64),"
+    "  `mac_address` varchar(17) NOT NULL,"
+    "  `chan_capab` TEXT,"
+    "  `x_coord` float,"
+    "  `y_coord` float,"
+    "  `z_coord` float,"
+    "  `global_loc_id` bigint,"
+    "  `floor` int(2),"
+    "  `loc_type` int(1),"
+    "  `mode` varchar(3),"
+    "  `power` float,"
+    "  `ssid` varchar(32),"
+    "  `status` int(2),"
+    "  `active_channel` int(2),"
+    "  `active_channel_sup` int(2),"
+    "  `ap_mac_address` varchar(17),"
+    "  PRIMARY KEY (`mac_address`)"
+    ") ENGINE=InnoDB")
 
 TABLES['rssi_meas'] = (
     "CREATE TABLE `rssi_meas` ("
@@ -38,18 +54,19 @@ TABLES['rssi_meas'] = (
     "  `bw_mode` int(2) NOT NULL,"
     "  `active_channel` int(2) NOT NULL,"
     "  `active_channel_sup` int(2) NOT NULL,"
-    "  PRIMARY KEY (`id`)"
+    "  PRIMARY KEY (`id`),"
+    "  FOREIGN KEY (`rx_mac_address`) REFERENCES devices(`mac_address`)"
     ") ENGINE=InnoDB")
-
 
 TABLES['duty_cycle'] = (
     "CREATE TABLE `duty_cycle` ("
-    "  `id` bigint NOT NULL AUTO_INCREMENT,"	
+    "  `id` bigint NOT NULL AUTO_INCREMENT,"
     "  `rx_mac_address` varchar(17) NOT NULL,"
     "  `value` float NOT NULL,"
     "  `timestamp` datetime NOT NULL,"
     "  `channel` int(2) NOT NULL,"
-    "  PRIMARY KEY (`id`)"
+    "  PRIMARY KEY (`id`),"
+    "  FOREIGN KEY (`rx_mac_address`) REFERENCES devices(`mac_address`)"
     ") ENGINE=InnoDB")
 
 TABLES['estimated_locations'] = (
@@ -63,7 +80,8 @@ TABLES['estimated_locations'] = (
     "  `timestamp` datetime NOT NULL,"
     "  `channel` int(2) NOT NULL,"
     "  `tx_power` float(4,2) NOT NULL,"
-    "  PRIMARY KEY (`id`)"
+    "  PRIMARY KEY (`id`),"
+    "  FOREIGN KEY (`global_loc_id`) REFERENCES global_location(`id`)"
     ") ENGINE=InnoDB")
 
 TABLES['propagation_model'] = (
@@ -78,20 +96,43 @@ TABLES['propagation_model'] = (
     "  PRIMARY KEY (`id`)"
     ") ENGINE=InnoDB")
 
-TABLES['global_location'] = (
-    "CREATE TABLE `global_location` ("
+TABLES['ap_statistics'] = (
+    "CREATE TABLE `ap_statistics` ("
     "  `id` bigint NOT NULL AUTO_INCREMENT,"
-    "  `x_coord` float NOT NULL,"
-    "  `y_coord` float NOT NULL,"
-    "  `z_coord` float NOT NULL,"
-    "  PRIMARY KEY (`id`)"
+    "  `ap_mac_address` varchar(17) NOT NULL,"
+    "  `total_tx_retries` float NOT NULL,"
+    "  `total_tx_failed` float NOT NULL,"
+    "  `total_tx_throughput` float NOT NULL,"
+    "  `total_rx_throughput` float NOT NULL,"
+    "  `total_tx_activity` float NOT NULL,"
+    "  `total_rx_activity` float NOT NULL,"
+    "  `timestamp` datetime NOT NULL,"
+    "  PRIMARY KEY (`id`),"
+    "  FOREIGN KEY (`ap_mac_address`) REFERENCES devices(`mac_address`)"
     ") ENGINE=InnoDB")
 
+TABLES['link_statistics'] = (
+    "CREATE TABLE `link_statistics` ("
+    "  `id` bigint NOT NULL AUTO_INCREMENT,"
+    "  `tx_mac_address` varchar(17) NOT NULL,"
+    "  `rx_mac_address` varchar(17) NOT NULL,"
+    "  `rssi` float NOT NULL,"
+    "  `tx_retries` float NOT NULL,"
+    "  `tx_failed` float NOT NULL,"
+    "  `tx_rate` float NOT NULL,"
+    "  `rx_rate` float NOT NULL,"
+    "  `tx_throughput` float NOT NULL,"
+    "  `rx_throughput` float NOT NULL,"
+    "  `tx_activity` float NOT NULL,"
+    "  `rx_activity` float NOT NULL,"
+    "  `timestamp` datetime NOT NULL,"
+    "  PRIMARY KEY (`id`),"
+    "  FOREIGN KEY (`rx_mac_address`) REFERENCES devices(`mac_address`)"
+    ") ENGINE=InnoDB")
 
 #cnx = mysql.connector.connect(user='root',password='rem', port='3306', host='localhost')
 cnx = mysql.connector.connect(user='root',password='rem', unix_socket='/var/run/mysqld/mysqld.sock')
 cursor = cnx.cursor()
-
 
 def create_database(cursor):
     try:
@@ -111,6 +152,17 @@ except mysql.connector.Error as err:
         print(err)
         exit(1)
 
+for name, ddl in TABLES.items():
+    try:
+        print("Creating table {}: ".format(name), end='')
+        cursor.execute(ddl)
+    except mysql.connector.Error as err:
+        if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
+            print("already exists.")
+        else:
+            print(err.msg)
+    else:
+        print("OK")
 
 for name, ddl in TABLES.items():
     try:
@@ -123,6 +175,24 @@ for name, ddl in TABLES.items():
             print(err.msg)
     else:
         print("OK")
+
+with open('device_locations.txt', 'r') as myfile:
+	data=myfile.read()
+	obj = json.loads(data)
+	for gloloc in obj['global_locations']:
+		loc = obj['global_locations'][gloloc]['coordinates']
+		location_data = (gloloc, loc[0], loc[1], loc[2])
+		locid = insert_query.insert_global_location(location_data)
+		obj['global_locations'][gloloc]['loc_id'] = locid
+		print(locid)
+		print(obj['global_locations'])
+
+	for device in obj['devices']:
+		locloc = obj['devices'][device]['coordinates']
+		floor = obj['devices'][device]['floor']
+		locid = obj['global_locations'][obj['devices'][device]['global_loc_name']]['loc_id']
+		device_data = (device, locloc[0], locloc[1], locloc[2], locid, floor, 0)
+		insert_query.insert_device_location(device_data)
 
 cursor.close()
 cnx.close()

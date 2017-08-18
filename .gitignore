@@ -1,2 +1,5 @@
 .DS_Store
 *.retry
+uniflex/dev
+*.egg-info
+*__pycache__
