@@ -18,3 +18,7 @@
 	path = nodes_ansible
 	url = https://github.com/danieldUKIM/nodes_ansible
 	branch = master
+[submodule "rem_events"]
+	path = rem_events
+	url = https://github.com/danieldUKIM/rem_events
+	branch = master
